@@ -1,0 +1,95 @@
+---
+title: "Project 3- Thera Bank"
+author: "Jake Tolentino"
+date: "5/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Business Understanding
+
+This data is from Thera Bank (Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx). The dataset has data on 5000 customers. The data include various variables or predictors have been provided like customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the target customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. This dataset has been provided by Thera Bank which is interested in increasing its asset base by giving out more loans to potential customers in order to earn interest income over a good period of financial years in future. This project is associated with using this dataset as input and draw meaningful observations. Finally communicating the observations to the people.
+
+With the given dataset we will try to understand the following:
+1. What are the characteristics of the customers who are likely to accept a personal loan? 
+2. What kind of customers exist in Thera Bank database?
+3. What is the best model to classify the right customers who have a higher probability of purchasing the loan?
+
+
+## 2. Data Understanding
+
+In this section of the report, we will load in the data, check for cleanliness, and then trim and clean the dataset for analysis.
+
+### Access
+```{r include=FALSE}
+#Replace the below command to point to your working directory
+setwd("~/Google Drive/Data Science/DSBA/Machine Learning/Project 3")
+```
+
+```{r}
+#Importing the libraries
+library(readxl)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(lattice)
+library(DataExplorer)
+library(grDevices)
+library(factoextra)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+```
+
+**Reading the excel file and viewing few rows to have a look at the dataframe**
+```{r}
+bank <- read_excel("Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx", sheet = "Bank_Personal_Loan_Modelling") #Loading the data in R
+head(Thera_Data,5) #Check top 5 and bottom 5 rows of the dataset 
+tail(Thera_Data,5)
+```
+
+**Getting the Size of the data**
+```{r}
+dim(bank) #Find out total number of rows and columns 
+names(bank) #Find out names of the columns (features) 
+colnames(bank)=c("ID","Age", "Experience", "Income", "Zip", "Family.members", "CCAvg", "Education", "Mortgage","Personal.Loan", "Securities.Account", "CD.Account", "Online", "CreditCard")
+```
+
+**Getting a brief description about the dataset**
+```{r}
+summary(bank) #Find out class of each Feature, along with internal structure 
+```
+
+**Finding datatypes of different columns to check whether any column has wrong datatype**
+```{r}
+str(bank) #Finding out the Structure of the Data.
+```
+
+## 3. Data Preparation
+### Clean
+**Converting the data types into suitable types.Since AAA.**
+
+
+####Droping columns
+**We drop all the columns which we do not need for any manupulations i.e from which data we cannot make out any thing.**
+
+
+**Looking for the number of rows having null values**
+```{r}
+anyNA(bank) #Check for missing values 
+colSums(is.na(bank)) #Checking columns which have missing values
+```
+
+```{r}
+bank$Family.members[is.na(bank$Family.members)] = mean(bank$Family.members, na.rm = T)
+any(is.na(bank)) #Check again after replacing with mean
+```
+
+The missing values are replaced with the median of the all the available values.
+The median of the Family Members is 2. So the missing value are imputed with 2
+
