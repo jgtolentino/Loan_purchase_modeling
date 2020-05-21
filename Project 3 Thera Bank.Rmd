@@ -2,7 +2,9 @@
 title: "Project 3- Thera Bank"
 author: "Jake Tolentino"
 date: "5/19/2020"
-output: html_document
+output:
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -11,12 +13,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## 1. Business Understanding
 
-This data is from Thera Bank (Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx). The dataset has data on 5000 customers. The data include various variables or predictors have been provided like customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the target customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. This dataset has been provided by Thera Bank which is interested in increasing its asset base by giving out more loans to potential customers in order to earn interest income over a good period of financial years in future. This project is associated with using this dataset as input and draw meaningful observations. Finally communicating the observations to the people.
+This data is from Thera Bank (Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx). The dataset has data on 5000 customers. The data include various variables or predictors have been provided like customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the target customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. This dataset has been provided by Thera Bank which is interested in increasing its asset base by giving out more loans to potential customers in order to earn interest income over a good period of financial years in future. This project is associated with using this dataset as input and draw meaningful observations. Finally communicating the observations to the stakeholders.
 
 With the given dataset we will try to understand the following:
-1. What are the characteristics of the customers who are likely to accept a personal loan? 
-2. What kind of customers exist in Thera Bank database?
-3. What is the best model to classify the right customers who have a higher probability of purchasing the loan?
+
+* What are the characteristics of the customers who are likely to accept a personal loan? 
+* What kind of customers exist in Thera Bank database?
+* What is the best model to classify the right customers who have a higher probability of purchasing the loan?
 
 
 ## 2. Data Understanding
@@ -34,7 +37,9 @@ setwd("~/Google Drive/Data Science/DSBA/Machine Learning/Project 3")
 library(readxl)
 library(readr)
 library(dplyr)
+library(corrplot)
 library(ggplot2)
+library(cluster)
 library(gridExtra)
 library(lattice)
 library(DataExplorer)
@@ -43,53 +48,390 @@ library(factoextra)
 library(caret)
 library(rpart)
 library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(ROCR)
+library(ineq)
 library(randomForest)
 ```
 
-**Reading the excel file and viewing few rows to have a look at the dataframe**
+Reading the excel file and viewing few rows to have a look at the dataframe
 ```{r}
 bank <- read_excel("Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx", sheet = "Bank_Personal_Loan_Modelling") #Loading the data in R
-head(Thera_Data,5) #Check top 5 and bottom 5 rows of the dataset 
-tail(Thera_Data,5)
+head(bank,5) #Check top 5 and bottom 5 rows of the dataset 
+tail(bank,5)
 ```
 
-**Getting the Size of the data**
+Getting the size of the data
 ```{r}
 dim(bank) #Find out total number of rows and columns 
 names(bank) #Find out names of the columns (features) 
+```
+
+The names of the columns need to be changed to make it more analysis friendly
+```{r}
 colnames(bank)=c("ID","Age", "Experience", "Income", "Zip", "Family.members", "CCAvg", "Education", "Mortgage","Personal.Loan", "Securities.Account", "CD.Account", "Online", "CreditCard")
 ```
 
-**Getting a brief description about the dataset**
+Getting a brief description about the dataset
 ```{r}
-summary(bank) #Find out class of each Feature, along with internal structure 
+summary(bank) #Find out class of each feature, along with internal structure 
 ```
+* Based of the summary we can find 18 missing values under Family.members column
+* We will replace missing values with mean value
+* There are certain negative values in experience which is not possible so we will treat them
+further after analyzing their correlation with other variables
 
-**Finding datatypes of different columns to check whether any column has wrong datatype**
+Finding datatypes of different columns to check whether any column has wrong datatype
 ```{r}
-str(bank) #Finding out the Structure of the Data.
+str(bank) #Finding out the structure of the data.
 ```
 
 ## 3. Data Preparation
-### Clean
-**Converting the data types into suitable types.Since AAA.**
 
-
-####Droping columns
-**We drop all the columns which we do not need for any manupulations i.e from which data we cannot make out any thing.**
-
-
-**Looking for the number of rows having null values**
+Looking for the number of rows having null values
 ```{r}
 anyNA(bank) #Check for missing values 
 colSums(is.na(bank)) #Checking columns which have missing values
 ```
 
+Dealing with missing values. The missing values are replaced with the mean of the all the available values.
 ```{r}
 bank$Family.members[is.na(bank$Family.members)] = mean(bank$Family.members, na.rm = T)
 any(is.na(bank)) #Check again after replacing with mean
 ```
 
-The missing values are replaced with the median of the all the available values.
-The median of the Family Members is 2. So the missing value are imputed with 2
+After missing value treatment summary of data
+```{r}
+summary(bank)
+```
+
+```{r}
+corrplot(cor(bank[,c(1:14)]))
+```
+* Age and experience have strong positive relation
+* Age and income have no linear relationship
+* Age and experience have no linear relationship
+
+#### Droping columns
+
+We drop all the columns (ID, Experience, and Zip) which we do not need for any manupulations i.e from which data we cannot make out any thing.
+
+Here we should not consider the ID as its completely unique for each customer and does not help in model building
+
+Age is highly correlated with Experience; we will consider Age to identify customers who will be
+interested in Personal Loans
+
+```{r}
+bank = subset(bank, select = -c(1, 3, 5)) #Removing the coloumn ID, Experience, and Zip
+bank
+dim(bank)
+```
+
+```{r}
+bank.backup= bank #Creating a back up file before making data transformation for visualization, this data back up will be used later for scaling, which will then be use for data modeling
+str(bank.backup)
+```
+
+### Clean
+
+
+Converting the data types into suitable types for Exploratory Data Analysis (EDA). Converting multiple columns (Education, Personal.Loan, Securities.Account, CD.Account, Online, and CreditCard) into factor columns.
+
+```{r}
+##  Converting multiple columns into factor columns
+col = c("Education","Personal.Loan","Securities.Account", "CD.Account", "Online", "CreditCard")
+bank[col] = lapply(bank[col], factor)
+
+## Converting Education into ordered factors, ordinal variable
+bank$Education = factor(bank$Education, levels = c("1", "2", "3"), order = TRUE)
+```
+
+```{r}
+str(bank)
+```
+
+
+
+### Exploratory Data Analysis
+
+Introduction Plot
+
+```{r}
+plot_intro(bank) #Visual examination of data structure  
+```
+
+Histogram Distributions of Dataset
+```{r}
+plot_histogram(bank) #Plotting the histogram for all numerical variables
+```
+
+Density Plots
+```{r}
+plot_density(bank, geom_density_args = list(fill="cyan", alpha = 0.4)) # Plotting density plot for all numerical variables 
+```
+
+## 4. Modeling
+### Analyse
+
+**1. What are the characteristics of the customers who are likely to accept a personal loan?** 
+
+Boxplots by Education classes
+```{r}
+plot_boxplot(bank, by = "Education", 
+             geom_boxplot_args = list("outlier.color" = "red")) #Plotting boxplot by factor of Education for all the numerical variables
+```
+
+Insight
+* Credit Card and Mortagage predictors have lots of outliers accross all three levels of Education
+* Income has lots of outliers in Grad and Advanced professionals
+
+Boxplots by Personal Loan classes
+```{r}
+plot_boxplot(bank, by = "Personal.Loan", 
+             geom_boxplot_args = list("outlier.color" = "blue")) #Plotting boxplot for Personal Loan (Response variable) for all numerical variables
+```
+Lots of “No” (Class 0) Personal loan takers are present as outliers in Credit Card, Mortgage, and Income predictors
+
+Following plots give us a good insight about how two categories of Personal Loan predictor are stacked across various other predictors like
+
+Income vs Mortgage (scatter)
+Income (density)
+Mortgage (density)
+Age (density)
+Income vs Education (histogram)
+
+```{r}
+p1 = ggplot(bank, aes(Income, fill= Personal.Loan)) + geom_density(alpha=0.4)
+p2 = ggplot(bank, aes(Mortgage, fill= Personal.Loan)) + geom_density(alpha=0.4)
+p3 = ggplot(bank, aes(Age, fill= Personal.Loan)) + geom_density(alpha=0.4)
+p4 = ggplot(bank, aes(Income, fill= Education)) + geom_histogram(alpha=0.4, bins = 70)
+p5 = ggplot(bank, aes(Income, Mortgage, color = Personal.Loan)) + 
+  geom_point(alpha = 0.7)
+grid.arrange(p1, p2, p3, p4, p5, ncol = 2, nrow = 3)
+```
+
+```{r}
+ggplot(bank, aes(Education,fill= Personal.Loan)) + 
+  geom_bar(stat = "count", position = "dodge") +
+  geom_label(stat = "count", aes(label= ..count..), 
+             size = 3, position = position_dodge(width = 0.9), vjust=-0.15)+
+  scale_fill_discrete(name = "Personal Loan", labels = c("0", "1"))+
+  theme_minimal()
+```
+Education
+
+* Proportion of no-loan takers is very high across all three categories of Education - Undergrad, Grad, and Advanced/Professional
+* Data is almost skewed towards No-Personal Loans which makes good suspects and prospects depending on target category of bank
+* There is good jump from 93(Undergrads) to 205 (Advanced/Professional)
+
+```{r}
+ggplot(bank, aes(Income,y = CCAvg, color = Personal.Loan)) + 
+    geom_point(size = 1)
+```
+Credit Card is very good indicator of who we can target bothways
+
+* Prospects who spend more may need to pay off their debt by taking Personal Loan
+Other category is who have good income but hesitate to spend can be offered loans on good conditions for their lifestyle and personal needs
+* Virtually People having income in 1st quartile i.e. between 38 K to 90K have no Personal loans and moderate Credit Card spending (under 3000)
+* People earning between 40K to 100K and having Credit Card spend less than $2500 can become good prime targets keeping other predictors constant and we see a good chunk of them in graph
+
+```{r}
+ggplot(bank, aes(Income,y = Mortgage, color = Personal.Loan)) + 
+  geom_point(size = 1)
+```
+Mortgage is another good indicator of who can be targeted.
+
+* By offering good terms to people having zero Mortgage
+* Others under considerate Mortgage like lets say 150K to settle their loans of high interest with low interest Personal Loans
+
+**2. What kind of customers exist in Thera Bank database?**
+
+Clustering
+Primarily hierarchial and kmeans clustering are two best suited methods for unsupervised learning. Since we have a large dataset (5000 observations) we cannot use hierarchial method.Kmeans suits this type of data categorization.
+
+Converting the data types the factor variables back to numeric which is the suitable data type for scaling. Converting multiple columns (Education, Personal.Loan, Securities.Account, CD.Account, Online, and CreditCard) into numeric columns.
+
+```{r}
+##  Converting multiple columns into factor columns
+col1 = c("Education","Personal.Loan","Securities.Account", "CD.Account", "Online", "CreditCard")
+bank[col1] = lapply(bank[col], as.integer)
+str(bank)
+```
+
+```{r}
+bank.scaled =scale(bank.backup) #Creating a scaled data using the back up data set which preserves the numeric data type which is suitable for data scaling and modeling
+head(bank.scaled)
+```
+We will first cluster the data into two clusters. Later below we will try to choose the optimal number of clusters.
+```{r}
+seed=1000
+set.seed(seed) #since kmeans uses a randomized starting point for cluster centroids
+clustA=kmeans(x=bank.scaled,centers = 2,nstart = 5)
+clusplot(bank.scaled,clust2$cluster,color = TRUE,shade = TRUE,
+labels = 2,lines = 1, xlab = "Component1", ylab = "Component2")
+```
+Now to the question of optimal numbner of clusters. Lets try K=2 to 5 and for each plot the "sum of Within cluster sum of squares".
+```{r}
+totWss=rep(0,5)
+for(k in 1:5){
+  set.seed(seed)
+  ClustB=kmeans(x=bank, centers=k, nstart=5)
+  totWss[k]=clust$tot.withinss
+}
+plot(c(1:5), totWss, type="b", xlab="Number of Clusters",
+       ylab="sum of 'Within groups sum of squares'")  
+```
+
+
+```{r}
+set.seed(seed)
+nc=NbClust(bank,min.nc = 2,max.nc = 5,method = "kmeans")
+```
+
+The object nc now contains the best number of cluster reported by each experiment. Tabulating the first row of nc:
+```{r}
+table(nc$Best.n[1,])
+```
+
+Suggesting strongly that K=4 would be the best choice:
+```{r}
+set.seed(seed)
+clustC=kmeans(bank.scaled,centers = 4,nstart = 5)
+clusplot(bank.scaled,clustC$cluster,color = TRUE,shade = TRUE,labels = 2,lines
+= 1,main = "Final Cluster")
+```
+
+
+**3. What is the best model to classify the right customers who have a higher probability of purchasing the loan?**
+
+
+Create testing data
+```{r}
+set.seed(111)
+str(bank.backup)
+prop.table(table(bank.backup$Personal.Loan))
+```
+Create training data
+```{r}
+trainindex = sample(c(1:nrow(bank)),round(nrow(bank)*0.7,0),replace = FALSE)
+train.data=bank[trainindex,]
+test.data=bank[-trainindex,]
+```
+
+Dimension check
+```{r}
+train.dim=dim(train.data)
+train.prop=round(prop.table((table(train.data$Personal.Loan))),3)
+test.dim=dim(test.data)
+test.prop=round(prop.table((table(test.data$Personal.Loan))),3)
+cbind(train.dim,train.prop,test.dim,test.prop)
+```
+Output Analysis
+Proportion of responders and non-responder in actual data set is 9.1% and 90.9% respectively.
+Train data contains 3500 observation out of which proportion of responders is 9.1% and nonresponders is 90.9%.
+Test data contains 1500 observation out of which proportion of responders is 10.7% and nonresponders is 89.3%.
+The data is well distributed in the training and validation sets almost in the same proportion as they were in proportion earlier before split
+Now as we had successfully partitioned our data, we can proceed further with building of CART and
+Random Forest 
+
+Building Decision Tree
+```{r}
+cart.train=train.data #Defining variables
+cart.test=test.data
+```
+
+```{r}
+rcontrol=rpart.control(minsplit = 100,minbucket = 10,cp = 0,xval = 10) #Setting the control parameters
+cartmodel=rpart(formula = train.data$Personal.Loan~.,data=cart.train,
+ method = "class",control = rcontrol) #Building CART model
+cartmodel
+rpart.plot(cartmodel)
+```
+```{r}
+fancyRpartPlot(cartmodel)
+```
+```{r}
+round(cartmodel$variable.importance)
+```
+```{r}
+cartmodel$cptable
+printcp(cartmodel)
+```
+```{r}
+cptable.frame=as.data.frame(cartmodel$cptable)
+cptable.frame$cp.deci=round(cptable.frame$CP,4)
+cptable.frame
+```
+
+```{r}
+plotcp(cartmodel,main="Size of Tree")
+```
+```{r}
+Prediction=predict(cartmodel,cart.train[,-7],type = "class")
+PredTrain=predict(cartmodel,cart.train[,-7])
+table2=table(cart.train$Personal.Loan,Prediction)
+sum(diag(table2))/sum(table2)
+```
+```{r}
+Prediction1=predict(cartmodel,cart.test[,-7],type = "class")
+PredTest=predict(cartmodel,cart.test[,-7])
+table3=table(cart.test$Personal.Loan,Prediction1)
+sum(diag(table3))/sum(table3)
+```
+```{r}
+CMTestdata=ROCR::prediction(PredTest[,2],cart.test$Personal.Loan)
+Perf2=performance(CMTestdata,"tpr","fpr")
+plot(Perf2)
+as.numeric(performance(CMTestdata,"auc")@y.values)
+```
+```{r}
+CMTraindata=ROCR::prediction(PredTrain[,2],cart.train$Personal.Loan)
+Perf1=performance(CMTraindata,"tpr","fpr")
+plot(Perf1)
+as.numeric(performance(CMTraindata,"auc")@y.values)
+```
+```{r}
+decile <- function(x){
+  deciles <- vector(length=10)
+  for (i in seq(0.1,1,.1)){
+    deciles[i*10] <- quantile(x, i, na.rm=T)
+  }
+  return (
+    ifelse(x<deciles[1], 1,
+    ifelse(x<deciles[2], 2,
+    ifelse(x<deciles[3], 3,
+    ifelse(x<deciles[4], 4,
+    ifelse(x<deciles[5], 5,
+    ifelse(x<deciles[6], 6,
+    ifelse(x<deciles[7], 7,
+    ifelse(x<deciles[8], 8,
+    ifelse(x<deciles[9], 9, 10  
+    ))))))))))
+}
+```
+```{r}
+carttraindeciles=decile(PredTrain[,2])
+View(PredTrain)
+carttestdeciles=decile(PredTest[,2])
+View(PredTest)
+```
+```{r}
+KSCHTrain = max(attr(Perf1,'y.values')[[1]]-attr(Perf1, 'x.values')[[1]])
+KSCHTrain
+```
+
+```{r}
+KSCHTest = max(attr(Perf2,'y.values')[[1]]-attr(Perf2, 'x.values')[[1]])
+KSCHTest
+```
+
+```{r}
+ ginichtrain = ineq(PredTrain[,2],type="Gini")
+ ginichtrain
+```
+```{r}
+ginichtest = ineq(PredTest[,2],type="Gini")
+ginichtest
+```
 
