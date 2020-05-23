@@ -309,7 +309,50 @@ Mortgage is another good indicator of who can be targeted
 
 Clustering
 
-Primarily hierarchial and k-means clustering are two best suited methods for unsupervised learning. Since we have a large dataset (5000 observations) we cannot use hierarchial method. Kmeans suits this type of data categorization.  Performing Hierarchal clustering will result to clusters which is difficult to interpret due to overlapping labels.
+Primarily hierarchial and k-means clustering are two best suited methods for unsupervised learning. Since we have a large dataset (5000 observations) we cannot use hierarchial method. Kmeans suits this type of data categorization.  Performing Hierarchal clustering will result to clusters which is difficult to interpret due to overlapping labels. We will will first perform hierarchial clustering to see this.
+
+Distance calculation
+```{r}
+Distchebyshev = dist(x=bank.backup, method = "maximum")
+Disteuc = dist(x=bank.backup, method = "euclidean")
+HCclusteuc = hclust(Disteuc, method = "complete")
+HCclustch = hclust(Distchebyshev, method = "complete")
+```
+
+Cluster height ,sorting and plotting
+```{r}
+clusterheight = HCclusteuc$height
+clusterheight = sort(clusterheight, decreasing = TRUE)
+plot(clusterheight, pch =20, col="red", main="Cluster Height",
+ ylab="Cluster Height")
+lines(clusterheight, lty=2, lwd=2, col="blue")
+```
+
+Cluster plotting and comparison
+```{r}
+par(mfrow=c(2,1))
+plot(HCclusteuc, 
+main = "HClust using Euclidian method", xlab = "Euclidian distance",
+ylab = "Height")
+rect.hclust(HCclusteuc, k=3, border = "red")
+```
+```{r}
+plot(HCclustch,
+main = "HClust using Chebychev method", xlab = "Chebychev distance",
+ylab = "Height")
+rect.hclust(HCclustch , k=3, border = "red")
+```
+```{r}
+plot(HCclusteuc,main="H clust Using Euclidian Method", xlab="Euclidian distance", ylab="Height")
+rect.hclust(HCclusteuc,k=3,border = "red")
+```
+```{r}
+plot(HCclustch ,main="H clust Using Chebychev Method", xlab="Chebychev  distance", ylab="Height")
+rect.hclust(HCclustch,k=3,border = "red")
+```
+The plots above proves that hierarchal clustering is difficult to interpret due to overlapping
+labels so we will proceed with K-Means Clustering as K-means clustering can handle large
+larger data set.
 
 To analyze our data set lets us start with scaling our data to control the variability of the dataset, it convert data into specific range using a linear transformation which generate good quality clusters and improve the accuracy of clustering algorithms and assign objects to 2 closest cluster center using nstart =5 as nstart option attempts multiple initial configurations and reports the best one.
 
