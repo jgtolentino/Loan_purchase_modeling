@@ -1,19 +1,34 @@
 ---
-title: "Project 3- Thera Bank"
+title: "Project 3: Thera Bank - Loan Purchase Modeling"
 author: "Jake Tolentino"
-date: "5/19/2020"
+date: "5/23/2020"
 output:
+  pdf_document: default
   html_document: default
   word_document: default
 ---
+<style>
+body {
+text-align: justify}
+</style>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Project Description
+
+This case is about a bank (Thera Bank) which has a growing customer base. Majority of these customers are liability customers (depositors) with varying size of deposits. The number of customers who are also borrowers (asset customers) is quite small, and the bank is interested in expanding this base rapidly to bring in more loan business and in the process, earn more through the interest on loans. In particular, the management wants to explore ways of converting its liability customers to personal loan customers (while retaining them as depositors). A campaign that the bank ran last year for liability customers showed a healthy conversion rate of over 9% success. This has encouraged the retail marketing department to devise campaigns with better target marketing to increase the success ratio with a minimal budget. The department wants to build a model that will help them identify the potential customers who have a higher probability of purchasing the loan. This will increase the success ratio while at the same time reduce the cost of the campaign. The dataset has data on 5000 customers. The data include customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. For this project we will follow the six steps in CRISP-DM, the standard data mining process. CRISP-DM stands for cross-industry process for data mining. The CRISP-DM methodology provides a structured approach to planning a data mining project. The six steps involved are:
+
+* Business Understanding
+* Data Understanding
+* Prepare Data
+* Data Modeling
+* Evaluate the Results
+
 ## 1. Business Understanding
 
-This data is from Thera Bank (Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx). The dataset has data on 5000 customers. The data include various variables or predictors have been provided like customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the target customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. This dataset has been provided by Thera Bank which is interested in increasing its asset base by giving out more loans to potential customers in order to earn interest income over a good period of financial years in future. This project is associated with using this dataset as input and draw meaningful observations. Finally communicating the observations to the stakeholders.
+For this case we will be using data from Thera Bank (Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx). The dataset has data on 5000 customers. The data include various variables or predictors have been provided like customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the target customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign. This dataset has been provided by Thera Bank which is interested in increasing its asset base by giving out more loans to potential customers in order to earn interest income over a good period of financial years in future. This project is associated with using this dataset as input and draw meaningful observations. Finally communicating the observations to the stakeholders.
 
 With the given dataset we will try to understand the following:
 
@@ -21,15 +36,39 @@ With the given dataset we will try to understand the following:
 * What kind of customers exist in Thera Bank database?
 * What is the best model to classify the right customers who have a higher probability of purchasing the loan?
 
+To answer the above questions we will be doing the following:
+
+* Perform exploratory data analysis (EDA) of the data available;
+* Apply appropriate clustering (customer segmentation) on the data and interpret the output ;
+* Build appropriate models on both the test and train data (Classification and Regression Trees (CART) and Random Forest); and
+* Use model performance measures to evaluate the model which is built.
 
 ## 2. Data Understanding
 
 In this section of the report, we will load in the data, check for cleanliness, and then trim and clean the dataset for analysis.
 
+### Data Description
+
+* ID                 |	Customer ID
+* Age                |	Customer's age in years
+* Experience         |	Years of professional experience
+* Income             |	Annual income of the customer ($000)
+* ZIPCode            |	Home Address ZIP code.
+* Family             |	Family size of the customer
+* CCAvg              |	Avg. spending on credit cards per month ($000)
+* Education          |	Education Level. 1: Undergrad; 2: Graduate; 3: Advanced/Professional
+* Mortgage           |	Value of house mortgage if any. ($000)
+* Personal Loan      |	Did this customer accept the personal loan offered in the last campaign?
+* Securities Account |	Does the customer have a securities account with the bank?
+* CD Account         |	Does the customer have a certificate of deposit (CD) account with the bank?
+* Online             |	Does the customer use internet banking facilities?
+* CreditCard         |	Does the customer use a credit card issued by the bank?
+
+
 ### Access
 ```{r include=FALSE}
 #Replace the below command to point to your working directory
-setwd("~/Google Drive/Data Science/DSBA/Machine Learning/Project 3")
+setwd("~/Documents/GitHub/Loan_purchase_modeling")
 ```
 
 ```{r}
@@ -40,6 +79,7 @@ library(dplyr)
 library(corrplot)
 library(ggplot2)
 library(cluster)
+library(NbClust)
 library(gridExtra)
 library(lattice)
 library(DataExplorer)
@@ -57,7 +97,8 @@ library(randomForest)
 
 Reading the excel file and viewing few rows to have a look at the dataframe
 ```{r}
-bank <- read_excel("Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx", sheet = "Bank_Personal_Loan_Modelling") #Loading the data in R
+bank <- read_excel("Thera Bank_Personal_Loan_Modelling-dataset-1.xlsx", 
+                   sheet = "Bank_Personal_Loan_Modelling") #Loading the data in R
 head(bank,5) #Check top 5 and bottom 5 rows of the dataset 
 tail(bank,5)
 ```
@@ -70,7 +111,9 @@ names(bank) #Find out names of the columns (features)
 
 The names of the columns need to be changed to make it more analysis friendly
 ```{r}
-colnames(bank)=c("ID","Age", "Experience", "Income", "Zip", "Family.members", "CCAvg", "Education", "Mortgage","Personal.Loan", "Securities.Account", "CD.Account", "Online", "CreditCard")
+colnames(bank)=c("ID","Age", "Experience", "Income", "Zip", "Family.members", 
+                 "CCAvg", "Education", "Mortgage","Personal.Loan", "Securities.Account", 
+                 "CD.Account", "Online", "CreditCard")
 ```
 
 Getting a brief description about the dataset
@@ -106,20 +149,22 @@ After missing value treatment summary of data
 summary(bank)
 ```
 
+* Based of the summary we can find missing values (NA’s18) under Family.members column
+* Replacing missing values with mean value
+* There are certain negative values in experience which is not possible so we will treat them
+further after analyzing their correlation with other variables.
+
 ```{r}
 corrplot(cor(bank[,c(1:14)]))
 ```
+
 * Age and experience have strong positive relation
 * Age and income have no linear relationship
 * Age and experience have no linear relationship
 
 #### Droping columns
 
-We drop all the columns (ID, Experience, and Zip) which we do not need for any manupulations i.e from which data we cannot make out any thing.
-
-Here we should not consider the ID as its completely unique for each customer and does not help in model building
-
-Age is highly correlated with Experience; we will consider Age to identify customers who will be
+We drop all the columns (ID, Experience, and Zip) which we do not need for any manupulations i.e from which data we cannot make out any thing. Here we should not consider the ID as its completely unique for each customer and does not help in model building. Age is highly correlated with Experience; we will consider Age to identify customers who will be
 interested in Personal Loans
 
 ```{r}
@@ -129,12 +174,12 @@ dim(bank)
 ```
 
 ```{r}
-bank.backup= bank #Creating a back up file before making data transformation for visualization, this data back up will be used later for scaling, which will then be use for data modeling
+bank.backup= bank #Creating a back up file before making data transformation for visualization, 
+#this data back up will be used later for scaling, which will then be use for data modeling
 str(bank.backup)
 ```
 
 ### Clean
-
 
 Converting the data types into suitable types for Exploratory Data Analysis (EDA). Converting multiple columns (Education, Personal.Loan, Securities.Account, CD.Account, Online, and CreditCard) into factor columns.
 
@@ -151,8 +196,6 @@ bank$Education = factor(bank$Education, levels = c("1", "2", "3"), order = TRUE)
 str(bank)
 ```
 
-
-
 ### Exploratory Data Analysis
 
 Introduction Plot
@@ -168,8 +211,14 @@ plot_histogram(bank) #Plotting the histogram for all numerical variables
 
 Density Plots
 ```{r}
-plot_density(bank, geom_density_args = list(fill="cyan", alpha = 0.4)) # Plotting density plot for all numerical variables 
+plot_density(bank, geom_density_args = list(fill="cyan", alpha = 0.4)) #Plotting density plot for all numerical variables 
 ```
+
+* Age feature is normally distributed with majority of customers falling between 30 years and 60 years of age. Mean is almost equal to median which is 45years.
+* CCAvg is positively skewed and spending is ranging between 0K to 10K and majority spends less than 2.5K.
+* Income is positively skewed. Majority of the customers have income between 45K and 55K. Mean is greater than the median.
+* Mortgage 70% of the individuals have a mortgage of less than 40K. Maximum value is 635K.
+
 
 ## 4. Modeling
 ### Analyse
@@ -179,27 +228,31 @@ plot_density(bank, geom_density_args = list(fill="cyan", alpha = 0.4)) # Plottin
 Boxplots by Education classes
 ```{r}
 plot_boxplot(bank, by = "Education", 
-             geom_boxplot_args = list("outlier.color" = "red")) #Plotting boxplot by factor of Education for all the numerical variables
+             geom_boxplot_args = list("outlier.color" = "red")) 
+#Plotting boxplot by factor of Education for all the numerical variables
 ```
 
 Insight
-* Credit Card and Mortagage predictors have lots of outliers accross all three levels of Education
+
+* Credit Card and Mortgage predictors have lots of outliers accross all three levels of Education
 * Income has lots of outliers in Grad and Advanced professionals
 
 Boxplots by Personal Loan classes
 ```{r}
 plot_boxplot(bank, by = "Personal.Loan", 
-             geom_boxplot_args = list("outlier.color" = "blue")) #Plotting boxplot for Personal Loan (Response variable) for all numerical variables
+             geom_boxplot_args = list("outlier.color" = "blue")) 
+#Plotting boxplot for Personal Loan (Response variable) for all numerical variables
 ```
+
 Lots of “No” (Class 0) Personal loan takers are present as outliers in Credit Card, Mortgage, and Income predictors
 
-Following plots give us a good insight about how two categories of Personal Loan predictor are stacked across various other predictors like
+Following plots give us a good insight about how two categories of Personal Loan predictor are stacked across various other predictors like:
 
-Income vs Mortgage (scatter)
-Income (density)
-Mortgage (density)
-Age (density)
-Income vs Education (histogram)
+* Income vs Mortgage (scatter)
+* Income (density)
+* Mortgage (density)
+* Age (density)
+* Income vs Education (histogram)
 
 ```{r}
 p1 = ggplot(bank, aes(Income, fill= Personal.Loan)) + geom_density(alpha=0.4)
@@ -211,6 +264,10 @@ p5 = ggplot(bank, aes(Income, Mortgage, color = Personal.Loan)) +
 grid.arrange(p1, p2, p3, p4, p5, ncol = 2, nrow = 3)
 ```
 
+
+* More people from age 30-40 have taken loan which is quite explanatory also as mostly people take loan in their young age of settle career which starts from age 30.
+* Customers having monthly income less than 100K most unlikely to take personal loans with current campaign.
+* Customers having average credit card spending per month more than 2.5K are pursued by campaign and more likely to take personal loan.
 ```{r}
 ggplot(bank, aes(Education,fill= Personal.Loan)) + 
   geom_bar(stat = "count", position = "dodge") +
@@ -219,20 +276,22 @@ ggplot(bank, aes(Education,fill= Personal.Loan)) +
   scale_fill_discrete(name = "Personal Loan", labels = c("0", "1"))+
   theme_minimal()
 ```
+
 Education
 
 * Proportion of no-loan takers is very high across all three categories of Education - Undergrad, Grad, and Advanced/Professional
 * Data is almost skewed towards No-Personal Loans which makes good suspects and prospects depending on target category of bank
-* There is good jump from 93(Undergrads) to 205 (Advanced/Professional)
+* There is good jump from 93 (Undergrads) to 205 (Advanced/Professional)
 
 ```{r}
 ggplot(bank, aes(Income,y = CCAvg, color = Personal.Loan)) + 
     geom_point(size = 1)
 ```
-Credit Card is very good indicator of who we can target bothways
+
+Credit Card is very good indicator of who we can target both ways
 
 * Prospects who spend more may need to pay off their debt by taking Personal Loan
-Other category is who have good income but hesitate to spend can be offered loans on good conditions for their lifestyle and personal needs
+* Other category is who have good income but hesitate to spend can be offered loans on good conditions for their lifestyle and personal needs
 * Virtually People having income in 1st quartile i.e. between 38 K to 90K have no Personal loans and moderate Credit Card spending (under 3000)
 * People earning between 40K to 100K and having Credit Card spend less than $2500 can become good prime targets keeping other predictors constant and we see a good chunk of them in graph
 
@@ -240,7 +299,8 @@ Other category is who have good income but hesitate to spend can be offered loan
 ggplot(bank, aes(Income,y = Mortgage, color = Personal.Loan)) + 
   geom_point(size = 1)
 ```
-Mortgage is another good indicator of who can be targeted.
+
+Mortgage is another good indicator of who can be targeted
 
 * By offering good terms to people having zero Mortgage
 * Others under considerate Mortgage like lets say 150K to settle their loans of high interest with low interest Personal Loans
@@ -248,36 +308,41 @@ Mortgage is another good indicator of who can be targeted.
 **2. What kind of customers exist in Thera Bank database?**
 
 Clustering
-Primarily hierarchial and kmeans clustering are two best suited methods for unsupervised learning. Since we have a large dataset (5000 observations) we cannot use hierarchial method.Kmeans suits this type of data categorization.
 
-Converting the data types the factor variables back to numeric which is the suitable data type for scaling. Converting multiple columns (Education, Personal.Loan, Securities.Account, CD.Account, Online, and CreditCard) into numeric columns.
+Primarily hierarchial and k-means clustering are two best suited methods for unsupervised learning. Since we have a large dataset (5000 observations) we cannot use hierarchial method. Kmeans suits this type of data categorization.  Performing Hierarchal clustering will result to clusters which is difficult to interpret due to overlapping labels.
 
+To analyze our data set lets us start with scaling our data to control the variability of the dataset, it convert data into specific range using a linear transformation which generate good quality clusters and improve the accuracy of clustering algorithms and assign objects to 2 closest cluster center using nstart =5 as nstart option attempts multiple initial configurations and reports the best one.
+
+Before scaling we need to check whether all data are numeric or not so performing below code in R to get result.
 ```{r}
-##  Converting multiple columns into factor columns
-col1 = c("Education","Personal.Loan","Securities.Account", "CD.Account", "Online", "CreditCard")
-bank[col1] = lapply(bank[col], as.integer)
-str(bank)
+str(bank.backup)
 ```
 
 ```{r}
-bank.scaled =scale(bank.backup) #Creating a scaled data using the back up data set which preserves the numeric data type which is suitable for data scaling and modeling
+bank.scaled =scale(bank.backup) #Creating a scaled data using the back up data set 
+#which preserves the numeric data type which is suitable for data scaling and modeling
 head(bank.scaled)
 ```
 We will first cluster the data into two clusters. Later below we will try to choose the optimal number of clusters.
 ```{r}
 seed=1000
 set.seed(seed) #since kmeans uses a randomized starting point for cluster centroids
-clustA=kmeans(x=bank.scaled,centers = 2,nstart = 5)
-clusplot(bank.scaled,clust2$cluster,color = TRUE,shade = TRUE,
+clustA=kmeans(x=bank.scaled,centers = 2,nstart = 5) 
+#Object assigning with 2 close clusters using nstart = 5
+clusplot(bank.scaled,clustA$cluster,color = TRUE,shade = TRUE,
 labels = 2,lines = 1, xlab = "Component1", ylab = "Component2")
 ```
-Now to the question of optimal numbner of clusters. Lets try K=2 to 5 and for each plot the "sum of Within cluster sum of squares".
+
+We need to find the right number of clusters which can be found by performing below steps by
+executing below code and then plot clusters again with the right number of clusters.
+
+Now to the question of optimal number of clusters. Lets try K=2 to 5 and for each plot the "sum of Within cluster sum of squares".
 ```{r}
 totWss=rep(0,5)
 for(k in 1:5){
   set.seed(seed)
-  ClustB=kmeans(x=bank, centers=k, nstart=5)
-  totWss[k]=clust$tot.withinss
+  ClustB=kmeans(x=bank.scaled, centers=k, nstart=5)
+  totWss[k]=clustA$tot.withinss
 }
 plot(c(1:5), totWss, type="b", xlab="Number of Clusters",
        ylab="sum of 'Within groups sum of squares'")  
@@ -286,7 +351,8 @@ plot(c(1:5), totWss, type="b", xlab="Number of Clusters",
 
 ```{r}
 set.seed(seed)
-nc=NbClust(bank,min.nc = 2,max.nc = 5,method = "kmeans")
+nc=NbClust(bank.backup,min.nc = 2,max.nc = 5,method = "kmeans") 
+#To determine relevant number of clusters and proposes best cluster
 ```
 
 The object nc now contains the best number of cluster reported by each experiment. Tabulating the first row of nc:
@@ -297,14 +363,23 @@ table(nc$Best.n[1,])
 Suggesting strongly that K=4 would be the best choice:
 ```{r}
 set.seed(seed)
-clustC=kmeans(bank.scaled,centers = 4,nstart = 5)
+clustC=kmeans(bank.scaled,centers = 4,nstart = 5) #Plotting 4 clusters 
 clusplot(bank.scaled,clustC$cluster,color = TRUE,shade = TRUE,labels = 2,lines
 = 1,main = "Final Cluster")
 ```
 
+Adding the cluster numbers back to the dataset and aggregating
+```{r}
+bank.backup$Clusters = clustC$cluster #Adding the cluster numbers back to the dataset
+custProfile = aggregate(bank.backup,list(bank.backup$Clusters),FUN="mean") 
+# Aggregate columns for each cluster by their means
+print(custProfile)
+```
+Insights
+
+Hubert Statistics and Dindex, indicate we can divide our dataset into 4 clusters. It makes sense that banks prefer targets who have good earning and may have in future increasing financial needs to support their lifestyle and needs. The Thera Bank customer can be segmeted to low income earner, mid-lower income earner, mid-upper income earner and high income earner.
 
 **3. What is the best model to classify the right customers who have a higher probability of purchasing the loan?**
-
 
 Create testing data
 ```{r}
@@ -328,12 +403,18 @@ test.prop=round(prop.table((table(test.data$Personal.Loan))),3)
 cbind(train.dim,train.prop,test.dim,test.prop)
 ```
 Output Analysis
-Proportion of responders and non-responder in actual data set is 9.1% and 90.9% respectively.
-Train data contains 3500 observation out of which proportion of responders is 9.1% and nonresponders is 90.9%.
-Test data contains 1500 observation out of which proportion of responders is 10.7% and nonresponders is 89.3%.
-The data is well distributed in the training and validation sets almost in the same proportion as they were in proportion earlier before split
+
+* Proportion of responders and non-responder in actual data set is 9.6% and 90.4% respectively.
+* Train data contains 3500 observation out of which proportion of responders is 9.4% and nonresponders is 90.6%.
+* Test data contains 1500 observation out of which proportion of responders is 10% and nonresponders is 90%.
+* The data is well distributed in the training and validation sets almost in the same proportion as they were in proportion earlier before split
+
 Now as we had successfully partitioned our data, we can proceed further with building of CART and
-Random Forest 
+Random Forest.
+
+**CART Model**
+
+Classification trees use recursive partitioning algorithms to learn and grow on data.
 
 Building Decision Tree
 ```{r}
@@ -342,7 +423,8 @@ cart.test=test.data
 ```
 
 ```{r}
-rcontrol=rpart.control(minsplit = 100,minbucket = 10,cp = 0,xval = 10) #Setting the control parameters
+rcontrol=rpart.control(minsplit = 100,minbucket = 10,cp = 0,xval = 10) 
+#Setting the control parameters
 cartmodel=rpart(formula = train.data$Personal.Loan~.,data=cart.train,
  method = "class",control = rcontrol) #Building CART model
 cartmodel
@@ -351,46 +433,82 @@ rpart.plot(cartmodel)
 ```{r}
 fancyRpartPlot(cartmodel)
 ```
+
+Calculate Variable Importance 
 ```{r}
 round(cartmodel$variable.importance)
 ```
+Income, Education, Family.member, CCAvg and CD.Account contributing a lot in classification of
+target variable and Mortgage playing very minimal contribution in splitting decision trees.
+
+Calculate Complexity Parameter (CP):
 ```{r}
 cartmodel$cptable
 printcp(cartmodel)
 ```
+From the table above we can see that cross validation error is lowest in 4th split and corresponding CP is 0.
+Pruning is done by randomly selecting a test sample and computing the error by running it down the
+large tree and subtrees.
+The tree with the smallest cross validation error will be the final tree as we will use the same CP.
+As CP is 0 so prune is not required anymore.
+
+
 ```{r}
 cptable.frame=as.data.frame(cartmodel$cptable)
 cptable.frame$cp.deci=round(cptable.frame$CP,4)
 cptable.frame
 ```
 
+Checking the complexity parameter 
 ```{r}
 plotcp(cartmodel,main="Size of Tree")
 ```
+
+**CART Model Performance on Train Data set**
+
+Confusion Matrix
+
+Calculate Confusion Matrix on Train Data
 ```{r}
 Prediction=predict(cartmodel,cart.train[,-7],type = "class")
 PredTrain=predict(cartmodel,cart.train[,-7])
 table2=table(cart.train$Personal.Loan,Prediction)
 sum(diag(table2))/sum(table2)
 ```
+
+Calculate Confusion Matrix on Test Data:
 ```{r}
 Prediction1=predict(cartmodel,cart.test[,-7],type = "class")
 PredTest=predict(cartmodel,cart.test[,-7])
 table3=table(cart.test$Personal.Loan,Prediction1)
 sum(diag(table3))/sum(table3)
 ```
+
+Validation of test data
 ```{r}
 CMTestdata=ROCR::prediction(PredTest[,2],cart.test$Personal.Loan)
 Perf2=performance(CMTestdata,"tpr","fpr")
 plot(Perf2)
 as.numeric(performance(CMTestdata,"auc")@y.values)
 ```
+Confusion Matrix Output
+
+The Train data is 98.31% accurate in predicting and Train data confirms the same with 98.46% of accuracy. There is a slight difference but that is within the range so we can confirm that our model is good model.
+
+Calculate ROC on Train Data 
 ```{r}
 CMTraindata=ROCR::prediction(PredTrain[,2],cart.train$Personal.Loan)
 Perf1=performance(CMTraindata,"tpr","fpr")
 plot(Perf1)
 as.numeric(performance(CMTraindata,"auc")@y.values)
 ```
+
+ROC Output Analysis
+
+We can see from the plot that it is covering large area under the curve and we are able to
+differentiate on the True Positive side. In Train data our true positive rate is 97.94% and in test data it’s 98.69%. so, there is no major variation in our Test and Train data, and this proves that our model is more stable.
+
+Deciling
 ```{r}
 decile <- function(x){
   deciles <- vector(length=10)
@@ -410,12 +528,18 @@ decile <- function(x){
     ))))))))))
 }
 ```
+
+Deciling on Test and Train data
 ```{r}
 carttraindeciles=decile(PredTrain[,2])
 View(PredTrain)
 carttestdeciles=decile(PredTest[,2])
 View(PredTest)
 ```
+
+**K-S Chart**
+
+Analysis of K-S on Train and Test model
 ```{r}
 KSCHTrain = max(attr(Perf1,'y.values')[[1]]-attr(Perf1, 'x.values')[[1]])
 KSCHTrain
@@ -425,7 +549,11 @@ KSCHTrain
 KSCHTest = max(attr(Perf2,'y.values')[[1]]-attr(Perf2, 'x.values')[[1]])
 KSCHTest
 ```
+KS Chart Analysis
 
+Train data can distinguish between responders and non-responder with 91.14% and Train can with 92.69% of accuracy. There is a slight variation but that is within the acceptable range.
+
+**Gini chart **
 ```{r}
  ginichtrain = ineq(PredTrain[,2],type="Gini")
  ginichtrain
@@ -434,4 +562,154 @@ KSCHTest
 ginichtest = ineq(PredTest[,2],type="Gini")
 ginichtest
 ```
+Gini Output Analysis
+
+The Train data covering maximum area responders and non-responder with 86.71% and Train can with 86.82% of accuracy. Again this is within the acceptable range.
+
+**Random Forest**
+
+```{r}
+set.seed(seed)
+rf.train = train.data #Using the same Train and Test data created
+rf.test = test.data
+```
+
+Using mtry = 3 following thumb rule of square root of independent variable and nodesize = 10
+```{r}
+RF = randomForest(as.factor(Personal.Loan)~ ., data = rf.train, 
+                   ntree=201, mtry = 3, nodesize = 10,
+                   importance=TRUE)
+print(RF) #Check the model output
+```
+
+```{r}
+plot(RF, main="")
+legend("topright", c("OOB", "0", "1"), text.col=1:6, lty=1:3, col=1:3)
+title(main="Error Rates Random Forest Thera Bank Data")
+```
+The OOB error rate as OOB is becoming a bit constant near 40 splits. The OOB estimate of error rate is 1.6%. We will tune our Random Forest to see that what is the best number of splits which we need to choose so that our OOB error rate is minimal.
+
+Calculate Variable Importance 
+```{r}
+impVar = round(randomForest::importance(RF),4) #List the importance of the variables
+impVar
+View(impVar)
+```
+Income, Education, Family.member, CD.Account and CCAvg contributing a lot in classification of target variable and Mortgage, CreditCard, and Online playing very minimal contribution in splitting decision trees as Highest the Gini Gain highest the importance of the variable.
+
+Tune the Random Forest
+```{r}
+tRF = tuneRF(x = rf.train[,-c(7)], y = as.factor(rf.train$Personal.Loan),
+                          mtrystart = 3,
+                          ntreeTry = 40, stepfactor = 1.5, improve = 0.001, trace = TRUE,
+                          plot = TRUE, doBest = TRUE, nodesize = 100, importance = TRUE)
+```
+
+
+The OOB increased a bit after tuning but not as much this confirms that the RF model, we then test this model on Test and Train data to prove its performance.
+
+**Random Forest Model Performance (Training)**
+
+Confusion Matrix
+
+Calculate the Confusion Matrix on Train Data
+```{r}
+predRFT = predict(tRF, rf.train[,-7], type= "class")
+predRFTrain = predict(tRF, rf.train[,-7], type= "prob")
+tab3=table(rf.train$Personal.Loan, predRFT)
+sum(diag(tab3))/sum(tab3)
+```
+```{r}
+predRFT1 = predict(tRF, rf.test[,-7], type= "class")
+predRFTest = predict(tRF, rf.test[,-7], type= "prob")
+tab4=table(rf.test$Personal.Loan, predRFT1)
+sum(diag(tab4))/sum(tab4)
+```
+
+Validation on Test Data
+```{r}
+DTpredROC2 = ROCR::prediction(PredTest[,2], cart.test$Personal.Loan)
+Perf2 = performance(DTpredROC2, "tpr", "fpr")
+plot(Perf2)
+as.numeric(performance(DTpredROC2, "auc")@y.values)
+```
+
+The Train data is 98.31% accurate in predicting and Test data confirms the same with 98.69% of accuracy. There is a slight difference but it is within the acceptable range so we can confirm that our model is good.
+
+**Deciling**
+
+Deciling on Train data 
+```{r}
+rf.train$deciles = decile(predRFTrain[,2])
+rf.train$deciles 
+```
+
+Deciling can be done on Test data 
+```{r}
+rf.test$deciles = decile(predRFTest[,2])
+rf.test$deciles 
+```
+
+Analysis of K-S on Train data
+```{r}
+KSRFTrain = max(attr(Perf1, 'y.values')[[1]]-attr(Perf1, 'x.values')[[1]])
+KSRFTrain
+```
+
+Analysis of K-S on Test data
+```{r}
+KSRFTest = max(attr(Perf2, 'y.values')[[1]]-attr(Perf2, 'x.values')[[1]])
+KSRFTest
+```
+The Train data can distinguish between responders and non-responder with 91.14% and Train can with 92.69% of accuracy. There is a slight difference but it is within the acceptable range so we can confirm that our model is good.
+
+**Gini chart**
+
+Gini for Train
+```{r}
+giniRFTrain = ineq(predRFTrain[,2], type = "Gini")
+giniRFTrain 
+```
+
+Gini for Test
+```{r}
+giniRFTest = ineq(predRFTest[,2], type = "Gini")
+giniRFTest 
+```
+The Train data is covering maximum area responders and non-responder with 91.63% and Train can with 91.53% of accuracy. There is a slight difference but it is within the acceptable range so we can confirm that our model is good.
+
+
+## 5. Evaluation
+
+**What are the characteristics of the customers who are likely to accept a personal loan?**
+
+* More people from age 30-40 have taken loan which is quite explanatory also as mostly people take loan in their young age of settle career which starts from age 30.
+* Customers having monthly income less than 100K most unlikely to take personal loans with current campaign.
+* Customers having average credit card spending per month more than 2.5K are pursued by campaign and more likely to take personal loan.
+* More educated people are more likely to take personal loans
+* Average Credit Card spending is very good indicator of who we can be targeted
+* Prospects who spend more may need to pay off their debt by taking Personal Loan
+* Mortgage is another good indicator of who can be targeted.
+
+**What kind of customers exist in Thera Bank database?**
+
+The Thera Bank customer can be segmeted to low income earner, mid-lower income earner, mid-upper income earner and high income earner.
+
+**What is the best model to classify the right customers who have a higher probability of purchasing the loan?**
+
+After creating the prediction model for the Thera Bank customer on CART and Random Forest and validating the model through various model validation tests, we can conclude that the Random Forest model performed better on all the validation result in both test and train data set, hence, can be taken as appropiate model for prediction of customer loan.
+
+## 6. Conclusion
+
+Various types of models were attempted some raw, some refined and tuned to display the their dissimilarity in approaching the same dataset under mostly similar conditions.
+
+If given a choice between low OOB (out of bag) error and accuracy . We should go with accuracy as this case demands so.
+
+As financial institution we want to be closer to 100% sure that there should be no tolerance for defaults and we are able to earn from interest income
+
+So under circumstnces Random Forest performs the best on dataset with accurancy of 98%.
+
+
+
+
 
